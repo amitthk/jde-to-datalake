@@ -1,11 +1,11 @@
-#+TITLE: JDE to Bakery Operations Data Ingestion System
-#+AUTHOR: Development Team
+#+TITLE: JD Edwards (JDE) to Bakery Operations Data Ingestion System
+#+AUTHOR: amitthk
 #+DATE: 2025-08-21
 #+OPTIONS: toc:2 num:t
 
 * Overview
 
-This system provides a comprehensive data ingestion pipeline between JDE (Edwards Enterprise Resource Planning) and a generic Bakery Operations system, with integrated S3 data lake functionality for audit trails and analytics.
+This system provides a sample data ingestion pipeline between JD Edwards (JDE) and a sample Bakery Operations system, with integrated S3 data lake functionality for audit trails and analytics.
 
 ** Architecture Diagram
 
