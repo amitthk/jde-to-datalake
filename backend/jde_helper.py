@@ -165,14 +165,14 @@ def fetch_existing_ingredient(product_name: str) -> dict:
     """Fetch an ingredient product by name"""
     load_dotenv()
 
-    outlet_id = os.getenv("OUTLET_ID")
-    bakeryops_token = os.getenv("BAKERY_SYSTEM_TOKEN")
+    facility_id = os.getenv("FACILITY_ID", "default_facility")
+    backend_base_url = os.getenv("BACKEND_BASE_URL", "http://localhost:8000")
     cur_dt = datetime.now()
     now = cur_dt.strftime("%d/%m/%Y %H:%M:%S")
-    endpoint = 'ingredients'
-    url = f'https://api.bakery-system.us/outlets/{outlet_id}/{endpoint}'
+    endpoint = 'products'
+    url = f'{backend_base_url}/bakeryops/facilities/{facility_id}/{endpoint}'
 
-    headers = {'Content-Type': 'application/json', 'Authorization': 'Access-Token {}'.format(bakeryops_token)}
+    headers = {'Content-Type': 'application/json'}
     params = {
         'archived': False,
         'includeAccess': True,

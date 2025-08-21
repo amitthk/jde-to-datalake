@@ -335,7 +335,7 @@ DB_NAME=bakery_operations_db
 BACKEND_BASE_URL=http://localhost:8000
 
 # Facility Management
-FACILITY_ID=your_facility_id
+FACILITY_ID=default_facility
 #+END_SRC
 
 *** JDE System Configuration

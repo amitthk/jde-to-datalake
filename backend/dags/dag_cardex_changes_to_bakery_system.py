@@ -131,14 +131,14 @@ def fetch_existing_ingredient(product_name: str) -> dict:
     """Fetch an Ingredient product by name"""
     load_dotenv()
 
-    outlet_id = os.getenv("OUTLET_ID")
-    bakeryops_token = os.getenv("BAKERY_SYSTEM_TOKEN")
+    facility_id = os.getenv("FACILITY_ID", "default_facility")
+    backend_base_url = os.getenv("BACKEND_BASE_URL", "http://localhost:8000")
     cur_dt = datetime.now()
     now = cur_dt.strftime("%d/%m/%Y %H:%M:%S")
-    endpoint = 'ingredients'
-    url = f'https://api.bakery-system.us/outlets/{outlet_id}/{endpoint}'
+    endpoint = 'products'
+    url = f'{backend_base_url}/bakeryops/facilities/{facility_id}/{endpoint}'
 
-    headers = {'Content-Type': 'application/json', 'Authorization': 'Access-Token {}'.format(bakeryops_token)}
+    headers = {'Content-Type': 'application/json'}
     params = {
         'archived': False,
         'includeAccess': True,
@@ -176,13 +176,13 @@ def create_new_ingredient(payload: dict) -> dict:
     """Create a new Ingredient product"""
     load_dotenv()
 
-    outlet_id = os.getenv("OUTLET_ID")
-    bakeryops_token = os.getenv("BAKERY_SYSTEM_TOKEN")
+    facility_id = os.getenv("FACILITY_ID", "default_facility")
+    backend_base_url = os.getenv("BACKEND_BASE_URL", "http://localhost:8000")
 
-    endpoint = 'ingredients'
-    url = f'https://api.bakery-system.us/outlets/{outlet_id}/{endpoint}'
+    endpoint = 'products'
+    url = f'{backend_base_url}/bakeryops/facilities/{facility_id}/{endpoint}'
 
-    headers = {'Content-Type': 'application/json', 'Authorization': 'Access-Token {}'.format(bakeryops_token)}
+    headers = {'Content-Type': 'application/json'}
 
     try:
         data_json = retry_request(url=url, headers=headers, method='POST', payload=payload)
@@ -243,14 +243,14 @@ def fetch_existing_ingredient_batch(ingredient_id: str, batch_name: str) -> dict
     """Fetch an Ingredient product batch by id and batch name"""
     load_dotenv()
 
-    outlet_id = os.getenv("OUTLET_ID")
-    bakeryops_token = os.getenv("BAKERY_SYSTEM_TOKEN")
+    facility_id = os.getenv("FACILITY_ID", "default_facility")
+    backend_base_url = os.getenv("BACKEND_BASE_URL", "http://localhost:8000")
     cur_dt = datetime.now()
     now = cur_dt.strftime("%d/%m/%Y %H:%M:%S")
-    endpoint = 'batches?archived=false&depleted=false&includeDefaultVendor=true&includeNotes=true&size=9999'
-    url = f'https://api.bakery-system.us/outlets/{outlet_id}/ingredients/{ingredient_id}/{endpoint}'
+    endpoint = 'inventory-movements?archived=false&depleted=false&includeDefaultVendor=true&includeNotes=true&size=9999'
+    url = f'{backend_base_url}/bakeryops/facilities/{facility_id}/{endpoint}'
 
-    headers = {'Content-Type': 'application/json', 'Authorization': 'Access-Token {}'.format(bakeryops_token)}
+    headers = {'Content-Type': 'application/json'}
 
     try:
         data_json = retry_request_lru(url=url, headers=headers, method='GET')
@@ -312,16 +312,16 @@ def check_transaction_exists_in_batch_actions(ingredient_id: str, batch_id: str,
     """Check if a transaction already exists in the batch actions by looking through notes"""
     load_dotenv()
 
-    outlet_id = os.getenv("OUTLET_ID")
-    bakeryops_token = os.getenv("BAKERY_SYSTEM_TOKEN")
+    facility_id = os.getenv("FACILITY_ID", "default_facility")
+    backend_base_url = os.getenv("BACKEND_BASE_URL", "http://localhost:8000")
     cur_dt = datetime.now()
     now = cur_dt.strftime("%d/%m/%Y %H:%M:%S")
     
-    # Get all actions for this batch
-    endpoint = f'batches/{batch_id}/actions'
-    url = f'https://api.bakery-system.us/outlets/{outlet_id}/ingredients/{ingredient_id}/{endpoint}'
+    # Get all inventory movements for this product
+    endpoint = f'inventory-movements'
+    url = f'{backend_base_url}/bakeryops/facilities/{facility_id}/{endpoint}'
     
-    headers = {'Content-Type': 'application/json', 'Authorization': 'Access-Token {}'.format(bakeryops_token)}
+    headers = {'Content-Type': 'application/json'}
 
     try:
         data_json = retry_request_lru(url=url, headers=headers, method='GET')
@@ -370,18 +370,17 @@ def create_new_ingredient_batch(ingredient_id: str, batch_name: str) -> dict:
         'tags': [],
         'notes': [{'text': f"IngredientId: {ingredient_id}, Batch: {batch_name}"}]
     }
-    outlet_id = os.getenv("OUTLET_ID")
-    bakeryops_token = os.getenv("BAKERY_SYSTEM_TOKEN")
+    facility_id = os.getenv("FACILITY_ID", "default_facility")
+    backend_base_url = os.getenv("BACKEND_BASE_URL", "http://localhost:8000")
     cur_dt = datetime.now()
     now = cur_dt.strftime("%d/%m/%Y %H:%M:%S")
-    endpoint = 'batches'
-    url = f'https://api.bakery-system.us/outlets/{outlet_id}/ingredients/{ingredient_id}/{endpoint}'
+    endpoint = 'inventory-adjustments'
+    url = f'{backend_base_url}/bakeryops/facilities/{facility_id}/{endpoint}'
 
     headers = {
-        'Content-Type': 'application/json',
-        'Authorization': f'Access-Token {bakeryops_token}'
+        'Content-Type': 'application/json'
     }
-    print(f"{now} : Sending this payload to Ingredient {ingredient_id} batch {json.dumps(payload)}")
+    print(f"{now} : Sending this payload to create inventory adjustment for ingredient {ingredient_id} batch {json.dumps(payload)}")
     return retry_request(url=url, headers=headers, method='POST', payload=payload)
 
 
@@ -407,8 +406,8 @@ def post_batch_action_payload(ingredient_id: str, batch_result: dict, row: dict,
     """Post the action data payload for a batch transaction"""
     load_dotenv()
     
-    outlet_id = os.getenv("OUTLET_ID")
-    bakeryops_token = os.getenv("BAKERY_SYSTEM_TOKEN")
+    facility_id = os.getenv("FACILITY_ID", "default_facility")
+    backend_base_url = os.getenv("BACKEND_BASE_URL", "http://localhost:8000")
     cur_dt = datetime.now()
     now = cur_dt.strftime("%d/%m/%Y %H:%M:%S")
     
@@ -464,9 +463,9 @@ def post_batch_action_payload(ingredient_id: str, batch_result: dict, row: dict,
         ]
     }
     
-    headers = {'Content-Type': 'application/json', 'Authorization': 'Access-Token {}'.format(bakeryops_token)}
-    endpoint = 'actions'
-    url = f'https://api.bakery-system.us/outlets/{outlet_id}/{endpoint}'
+    headers = {'Content-Type': 'application/json'}
+    endpoint = 'inventory-adjustments'
+    url = f'{backend_base_url}/bakeryops/facilities/{facility_id}/{endpoint}'
     
     data_json = retry_request(url=url, headers=headers, method='POST', payload=payload)
     print(f'{now} : Here is the response we got from bakery-system after posting actionData: {json.dumps(data_json)}')
@@ -491,11 +490,12 @@ def call_bakery_system_api(url: str, payload: dict) -> dict:
         logging.error(f"Error sending data to {url}")
     return None
 
-def invalidate_ingredient_lru_cache(outlet_id: str, bakeryops_token: str, ingredient_id: str, batch_id:str):
-    endpoint = f'batches/{batch_id}/actions'
-    url = f'https://api.bakery-system.us/outlets/{outlet_id}/ingredients/{ingredient_id}/{endpoint}'
+def invalidate_ingredient_lru_cache(facility_id: str, ingredient_id: str, batch_id:str):
+    backend_base_url = os.getenv("BACKEND_BASE_URL", "http://localhost:8000")
+    endpoint = f'inventory-movements'
+    url = f'{backend_base_url}/bakeryops/facilities/{facility_id}/{endpoint}'
     
-    headers = {'Content-Type': 'application/json', 'Authorization': 'Access-Token {}'.format(bakeryops_token)}
+    headers = {'Content-Type': 'application/json'}
     invalidate_lru_cache(url=url, headers=headers,method='GET')
 
 
