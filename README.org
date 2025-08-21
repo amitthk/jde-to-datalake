@@ -122,9 +122,9 @@ FACILITY_ID=default_facility
 
 # JDE Configuration (update with your JDE server details)
 JDE_BUSINESS_UNIT=1110
-JDE_PO_URL=https://your-jde-server/jderest/v3/orchestrator/JDE_PO_SUMMARY
-JDE_PO_USERNAME=your_username
-JDE_PO_PASSWORD=your_password
+JDE_CARDEX_URL=https://your-jde-server/jderest/v3/orchestrator/JDE_CARDEX_SUMMARY
+JDE_CARDEX_USERNAME=your_username
+JDE_CARDEX_PASSWORD=your_password
 
 # S3 Configuration (optional for development)
 AWS_ACCESS_KEY_ID=your_access_key
@@ -341,9 +341,9 @@ FACILITY_ID=your_facility_id
 *** JDE System Configuration
 #+BEGIN_SRC bash
 JDE_BUSINESS_UNIT=1110
-JDE_PO_URL=https://your-jde-server/jderest/v3/orchestrator/JDE_PO_SUMMARY
-JDE_PO_USERNAME=your_username
-JDE_PO_PASSWORD=your_password
+JDE_CARDEX_URL=https://your-jde-server/jderest/v3/orchestrator/JDE_CARDEX_SUMMARY
+JDE_CARDEX_USERNAME=your_username
+JDE_CARDEX_PASSWORD=your_password
 JDE_ITEM_MASTER_UPDATES_URL=https://your-jde-server/jderest/v3/orchestrator/JDE_ITEM_MASTER
 JDE_IA_URL=https://your-jde-server/jderest/v3/orchestrator/JDE_INVENTORY_ADJUSTMENTS
 #+END_SRC
@@ -752,12 +752,12 @@ curl -H "Origin: http://localhost:3000" \
 *** JDE Integration Problems
 #+BEGIN_SRC bash
 # Check JDE endpoint availability
-curl -u $JDE_PO_USERNAME:$JDE_PO_PASSWORD \
-     $JDE_PO_URL
+curl -u $JDE_CARDEX_USERNAME:$JDE_CARDEX_PASSWORD \
+     $JDE_CARDEX_URL
 
 # Test JDE authentication
-curl -i -u $JDE_PO_USERNAME:$JDE_PO_PASSWORD \
-     $JDE_PO_URL
+curl -i -u $JDE_CARDEX_USERNAME:$JDE_CARDEX_PASSWORD \
+     $JDE_CARDEX_URL
 
 # Verify JDE data format
 curl http://localhost:8000/data/joined_df3
@@ -1025,9 +1025,9 @@ DB_NAME=bakery_operations_db
 BACKEND_BASE_URL=http://localhost:8000
 FACILITY_ID=default_facility
 JDE_BUSINESS_UNIT=1110
-JDE_PO_URL=https://your-jde-server/jderest/v3/orchestrator/JDE_PO_SUMMARY
-JDE_PO_USERNAME=your_username
-JDE_PO_PASSWORD=your_password
+JDE_CARDEX_URL=https://your-jde-server/jderest/v3/orchestrator/JDE_CARDEX_SUMMARY
+JDE_CARDEX_USERNAME=your_username
+JDE_CARDEX_PASSWORD=your_password
 AWS_ACCESS_KEY_ID=your_access_key
 AWS_SECRET_ACCESS_KEY=your_secret_key
 S3_BUCKET_NAME=bakery-operations-data-lake
