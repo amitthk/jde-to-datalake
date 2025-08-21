@@ -1,0 +1,16 @@
+/* src/App.css */
+
+.App {
+  text-align: center;
+}
+
+header {
+  background-color: #4CAF50;
+  color: white;
+  padding: 1rem;
+  text-align: left;
+}
+
+.navbar-brand, .nav-link {
+  font-weight: bold;
+}

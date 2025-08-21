@@ -1,0 +1,1036 @@
+#+TITLE: JDE to Bakery Operations Data Ingestion System
+#+AUTHOR: Development Team
+#+DATE: 2025-08-21
+#+OPTIONS: toc:2 num:t
+
+* Overview
+
+This system provides a comprehensive data ingestion pipeline between JDE (Edwards Enterprise Resource Planning) and a generic Bakery Operations system, with integrated S3 data lake functionality for audit trails and analytics.
+
+** Architecture Diagram
+
+#+BEGIN_EXAMPLE
+┌─────────────┐    ┌─────────────────┐    ┌──────────────────┐    ┌─────────────┐
+│     JDE     │◄──►│  Data Pipeline  │◄──►│ Bakery Operations│◄──►│  S3 Data    │
+│   System    │    │   (FastAPI +    │    │     System       │    │   Lake      │
+│             │    │    Airflow)     │    │   (Internal)     │    │             │
+└─────────────┘    └─────────────────┘    └──────────────────┘    └─────────────┘
+                            │
+                    ┌─────────────────┐
+                    │   PostgreSQL    │
+                    │   Database      │
+                    │  (Metadata &    │
+                    │   Tracking)     │
+                    └─────────────────┘
+#+END_EXAMPLE
+
+* Key Features
+
+** Bi-directional Data Flow
+The system enables seamless data exchange between JDE and Bakery Operations:
+- *JDE to Bakery Operations*: Transfers inventory updates and product master data
+- *Bakery Operations to JDE*: Sends usage and consumption data along with inventory adjustments
+
+** S3 Data Lake Integration
+All data operations are captured and stored in a comprehensive data lake:
+- Data flows are stored as Parquet files in S3 for efficient querying
+- Files are organized by date and operation type for easy navigation
+- Schema versions are tracked automatically as data structures evolve
+- Complete audit trail maintains compliance and supports analytics
+
+** Web-based Dashboard
+The intuitive dashboard provides complete system oversight:
+- Monitor data flows in real-time across all system components
+- Control batch processing operations with detailed progress tracking
+- Explore and download data directly from S3 storage
+- Manage database schemas and track their evolution over time
+
+** Schema Management
+The system automatically handles data structure changes:
+- Schemas are inferred automatically from incoming data
+- All schema versions are tracked with timestamps in PostgreSQL
+- DDL scripts are generated automatically for new table structures
+- Schema evolution ensures backward compatibility is maintained
+
+** Internal Bakery Operations Endpoints
+The system includes self-contained API endpoints that eliminate external dependencies:
+- Built-in endpoints are available under the ~/bakeryops/~ path
+- No external bakery operations system is required for basic functionality
+- Data is stored in memory with automatic S3 backup for audit purposes
+- Mock data generation tools are included for testing and development
+
+* System Components
+
+** Backend Services
+
+*** Core Services
+The backend infrastructure is built around several integrated services. The FastAPI application serves as the main API server (~backend/main.py~) with built-in internal bakery operations endpoints available at ~/bakeryops/*~. Data lake operations are managed through the S3 helper module (~backend/s3_helper.py~), while schema tracking and versioning is handled by the schema manager (~backend/schema_manager.py~). Integration with JDE systems is provided through the dedicated JDE helper (~backend/jde_helper.py~).
+
+*** Helper Modules
+Supporting functionality includes the bakery operations helper for API integration (~backend/bakery_ops_helper.py~), JWT-based authentication system (~backend/auth.py~), comprehensive user session management (~backend/session_helper.py~), and shared utility functions (~backend/utility.py~).
+
+** Data Pipeline (Airflow DAGs)
+The system includes automated data pipeline workflows for seamless data synchronization. The JDE Cardex to Bakery Operations pipeline (~backend/dags/dag_cardex_changes_to_bakery_ops.py~) handles inventory transfers, while the Bakery Operations to JDE synchronization (~backend/dags/dag_bakery_ops_to_jde.py~) manages usage and consumption data flow back to the JDE system.
+
+** Frontend Application
+The user interface is built as a React-based dashboard (~ui/src/~) with a well-organized component structure. The main application component (~App.js~) orchestrates the overall user experience, while the ~components/~ directory contains reusable UI elements for data visualization and user interaction. State management is handled through React context (~context/~), and API configuration is centralized in the ~config/~ directory.
+
+** Database Schema
+PostgreSQL serves as the central database for metadata tracking and comprehensive audit trails. The complete database schema is defined in ~backend/create_bakery_ops_tables.sql~ and includes all necessary tables for tracking system operations, data transformations, and user activities.
+
+* Installation & Setup
+
+** Prerequisites
+
+*** System Requirements
+The following software components are required for system operation:
+
+Python version 3.8 or higher is needed for all backend services, while Node.js version 16.x or higher is required for the frontend application. PostgreSQL version 12.x or higher handles metadata and tracking operations. An AWS account is required for S3 data lake functionality, though this is optional during development phases.
+
+*** Development Tools
+Several tools are recommended for effective development and system administration:
+
+Version control and collaboration are managed through ~git~, while API testing and debugging can be performed using ~curl~. Database management and queries are handled through ~psql~, and S3 operations require ~aws-cli~ when utilizing cloud storage features.
+
+** Quick Start
+
+*** 1. Repository Setup
+Start by cloning the repository and preparing the environment configuration:
+
+#+BEGIN_SRC bash
+# Clone the repository
+git clone <repository-url>
+cd jde-to-datalake
+
+# Copy environment template
+cp .env.template backend/.env
+#+END_SRC
+
+*** 2. Environment Configuration
+Edit the ~backend/.env~ file with your specific settings:
+
+#+BEGIN_SRC bash
+# Database Configuration
+PG_DATABASE_URL=postgresql://username:password@localhost:5432/bakery_operations_db
+DB_NAME=bakery_operations_db
+
+# Backend Configuration
+BACKEND_BASE_URL=http://localhost:8000
+
+# Facility Configuration
+FACILITY_ID=default_facility
+
+# JDE Configuration (update with your JDE server details)
+JDE_BUSINESS_UNIT=1110
+JDE_PO_URL=https://your-jde-server/jderest/v3/orchestrator/JDE_PO_SUMMARY
+JDE_PO_USERNAME=your_username
+JDE_PO_PASSWORD=your_password
+
+# S3 Configuration (optional for development)
+AWS_ACCESS_KEY_ID=your_access_key
+AWS_SECRET_ACCESS_KEY=your_secret_key
+S3_BUCKET_NAME=bakery-operations-data-lake
+
+# Authentication
+SECRET_KEY=your-secret-key-change-this-in-production
+#+END_SRC
+
+*** 3. Database Setup
+Create and initialize the PostgreSQL database with the required schema:
+
+#+BEGIN_SRC bash
+# Create database
+createdb bakery_operations_db
+
+# Run schema creation
+psql -d bakery_operations_db -f backend/create_bakery_ops_tables.sql
+#+END_SRC
+
+*** 4. Backend Setup
+Set up the Python environment and start the backend service:
+
+#+BEGIN_SRC bash
+# Navigate to backend
+cd backend
+
+# Create virtual environment (recommended)
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Start the development server
+uvicorn main:app --reload --host 0.0.0.0 --port 8000
+#+END_SRC
+
+The backend will be available at: http://localhost:8000
+
+*** 5. Frontend Setup
+In a separate terminal, set up and start the React frontend:
+
+#+BEGIN_SRC bash
+# Navigate to UI directory (in a new terminal)
+cd ui
+
+# Install dependencies
+npm install
+
+# Start development server
+npm start
+#+END_SRC
+
+The frontend will be available at: http://localhost:3000
+
+*** 6. Initial Data Setup
+Once both services are running, initialize the system with sample data:
+
+#+BEGIN_SRC bash
+# Initialize sample data for testing
+curl -X POST http://localhost:8000/dev/initialize-sample-data
+
+# Test internal endpoints
+curl http://localhost:8000/dev/test-internal-bakery-ops
+#+END_SRC
+
+** Production Deployment
+
+*** Using Systemd Services
+
+**** 1. Copy deployment scripts
+#+BEGIN_SRC bash
+# Make deployment scripts executable
+chmod +x deploy/setup-production-systemd.sh
+chmod +x deploy/setup-simple-systemd.sh
+#+END_SRC
+
+**** 2. Run production setup
+#+BEGIN_SRC bash
+# For production with Gunicorn
+sudo ./deploy/setup-production-systemd.sh
+
+# Or for simple setup
+sudo ./deploy/setup-simple-systemd.sh
+#+END_SRC
+
+**** 3. Service Management
+#+BEGIN_SRC bash
+# Start services
+sudo systemctl start stical-data-backend
+sudo systemctl start stical-data-frontend
+
+# Enable auto-start
+sudo systemctl enable stical-data-backend
+sudo systemctl enable stical-data-frontend
+
+# Check status
+sudo systemctl status stical-data-backend
+sudo systemctl status stical-data-frontend
+#+END_SRC
+
+*** Manual Production Setup
+
+**** Backend Production
+#+BEGIN_SRC bash
+# Install production WSGI server
+pip install gunicorn
+
+# Run with Gunicorn
+cd backend
+gunicorn main:app -w 4 -b 0.0.0.0:8000
+#+END_SRC
+
+**** Frontend Production
+#+BEGIN_SRC bash
+# Build for production
+cd ui
+npm run build
+
+# Serve static files (using serve or nginx)
+npx serve -s build -l 3000
+#+END_SRC
+
+** Docker Deployment (Optional)
+
+*** Backend Dockerfile
+Create ~backend/Dockerfile~:
+#+BEGIN_SRC dockerfile
+FROM python:3.9-slim
+
+WORKDIR /app
+COPY requirements.txt .
+RUN pip install -r requirements.txt
+
+COPY . .
+EXPOSE 8000
+
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+#+END_SRC
+
+*** Frontend Dockerfile
+Create ~ui/Dockerfile~:
+#+BEGIN_SRC dockerfile
+FROM node:16-alpine AS builder
+
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci --only=production
+
+COPY . .
+RUN npm run build
+
+FROM nginx:alpine
+COPY --from=builder /app/build /usr/share/nginx/html
+EXPOSE 80
+
+CMD ["nginx", "-g", "daemon off;"]
+#+END_SRC
+
+*** Docker Compose
+Create ~docker-compose.yml~:
+#+BEGIN_SRC yaml
+version: '3.8'
+
+services:
+  backend:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    environment:
+      - PG_DATABASE_URL=postgresql://postgres:password@db:5432/bakery_ops
+    depends_on:
+      - db
+
+  frontend:
+    build: ./ui
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+
+  db:
+    image: postgres:13
+    environment:
+      - POSTGRES_DB=bakery_ops
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:
+#+END_SRC
+
+* Configuration
+
+** Environment Variables
+
+*** Core Backend Configuration
+#+BEGIN_SRC bash
+# Database
+PG_DATABASE_URL=postgresql://username:password@localhost:5432/database_name
+DB_NAME=bakery_operations_db
+
+# Backend API
+BACKEND_BASE_URL=http://localhost:8000
+
+# Facility Management
+FACILITY_ID=your_facility_id
+#+END_SRC
+
+*** JDE System Configuration
+#+BEGIN_SRC bash
+JDE_BUSINESS_UNIT=1110
+JDE_PO_URL=https://your-jde-server/jderest/v3/orchestrator/JDE_PO_SUMMARY
+JDE_PO_USERNAME=your_username
+JDE_PO_PASSWORD=your_password
+JDE_ITEM_MASTER_UPDATES_URL=https://your-jde-server/jderest/v3/orchestrator/JDE_ITEM_MASTER
+JDE_IA_URL=https://your-jde-server/jderest/v3/orchestrator/JDE_INVENTORY_ADJUSTMENTS
+#+END_SRC
+
+*** S3 Data Lake Configuration
+#+BEGIN_SRC bash
+AWS_ACCESS_KEY_ID=your_access_key
+AWS_SECRET_ACCESS_KEY=your_secret_key
+AWS_REGION=us-east-1
+S3_BUCKET_NAME=bakery-operations-data-lake
+S3_BASE_PREFIX=jde-ingestion
+#+END_SRC
+
+*** Authentication Configuration
+#+BEGIN_SRC bash
+SECRET_KEY=your-secret-key-change-this-in-production-must-be-long-and-random
+ALGORITHM=HS256
+ACCESS_TOKEN_EXPIRE_MINUTES=30
+
+# LDAP Configuration (optional)
+LDAP_SERVER=ldap://your-ldap-server:389
+LDAP_BASE_DN=dc=company,dc=com
+LDAP_USER_DN=cn=users,dc=company,dc=com
+#+END_SRC
+
+** Frontend Configuration
+
+*** API Configuration
+Edit ~ui/src/config/api.js~:
+#+BEGIN_SRC javascript
+const API_CONFIG = {
+  BASE_URL: process.env.REACT_APP_API_URL || 'http://localhost:8000',
+  ENDPOINTS: {
+    TOKEN: '/token',
+    HEALTH: '/health',
+    DATA: '/data',
+    BAKERY_OPS: '/bakeryops',
+    S3: '/s3'
+  },
+  TIMEOUT: 30000
+};
+
+export default API_CONFIG;
+#+END_SRC
+
+*** Environment Variables for Frontend
+Create ~ui/.env~:
+#+BEGIN_SRC bash
+REACT_APP_API_URL=http://localhost:8000
+REACT_APP_TITLE=STICAL Data Management System
+REACT_APP_VERSION=2.0.0
+#+END_SRC
+
+* Internal Bakery Operations API
+
+** Available Endpoints
+
+*** Products Management
+- ~GET /bakeryops/facilities/{facility_id}/products~ - List products
+- ~POST /bakeryops/facilities/{facility_id}/products~ - Create product
+
+*** Inventory Management  
+- ~POST /bakeryops/facilities/{facility_id}/inventory-adjustments~ - Create adjustment
+- ~GET /bakeryops/facilities/{facility_id}/inventory-movements~ - List movements
+
+*** Development Helpers
+- ~POST /bakeryops/facilities/{facility_id}/batch-data~ - Add sample data
+- ~POST /dev/initialize-sample-data~ - Initialize test data
+- ~GET /dev/test-internal-bakery-ops~ - Test all endpoints
+
+** Data Structure
+
+*** Product Object
+#+BEGIN_SRC json
+{
+  "_id": "prod_001",
+  "facility_id": "default_facility", 
+  "productName": "Flour",
+  "description": "All-purpose flour",
+  "productCategory": "Ingredient",
+  "inventoryUnit": "KG",
+  "onHand": {
+    "amount": 100,
+    "batches": []
+  },
+  "archived": false,
+  "created_at": "2025-08-21T10:00:00Z",
+  "updated_at": "2025-08-21T10:00:00Z"
+}
+#+END_SRC
+
+*** Movement Object
+#+BEGIN_SRC json
+{
+  "_id": "mov_001",
+  "facility_id": "default_facility",
+  "productId": "prod_001", 
+  "batchNumber": "FLOUR_001",
+  "quantity": 10,
+  "unit": "KG",
+  "adjustmentType": "USAGE",
+  "reason": "Production batch 001",
+  "adjustmentDate": "2025-08-21T10:00:00Z",
+  "vesselCode": "V001",
+  "lotNumber": "LOT001"
+}
+#+END_SRC
+
+* API Endpoints
+
+** Core Data Endpoints
+- ~GET /data/df_bakery_ops_expanded~ - Bakery operations products
+- ~GET /data/joined_df3~ - JDE vs Bakery Ops comparison
+- ~GET /data/jde_item_master_review~ - Item master comparison
+- ~GET /data/internal_bakery_ops_expanded~ - Internal bakery ops data
+
+** S3 Data Lake Endpoints
+- ~GET /s3/dispatches~ - List S3 stored dispatches
+- ~GET /s3/schemas~ - Get schema versions  
+- ~GET /s3/download/{s3_key}~ - Download dispatch file
+
+** Dispatch Control Endpoints
+- ~GET /data/bakery_ops_to_jde_actions~ - Get pending actions
+- ~POST /bakery_ops_to_jde/dispatch~ - Dispatch to JDE
+- ~POST /bakery_ops_to_jde/prepare_payload~ - Preview JDE payload
+
+** Authentication Endpoints
+- ~POST /token~ - Get authentication token
+- ~GET /health~ - Health check (no auth required)
+
+** Development & Testing Endpoints
+- ~POST /dev/initialize-sample-data~ - Initialize sample data
+- ~GET /dev/test-internal-bakery-ops~ - Test internal endpoints
+
+* Data Flow Patterns
+
+** 1. JDE Cardex Changes → Bakery Operations
+#+BEGIN_SRC python
+# Fetch JDE cardex data
+jde_data = get_latest_jde_cardex(business_unit, date_range)
+
+# Transform and enrich
+processed_data = transform_jde_to_bakery_ops_format(jde_data)
+
+# Dispatch to internal Bakery Operations
+results = dispatch_to_bakery_operations(processed_data)
+
+# Store in S3 data lake
+s3_helper.store_jde_dispatch(processed_data, 'cardex_changes')
+#+END_SRC
+
+** 2. Bakery Operations Usage → JDE
+#+BEGIN_SRC python
+# Fetch usage data from internal Bakery Operations
+usage_data = fetch_action_data_from_bakery_operations(start_date)
+
+# Transform to JDE format
+jde_payload = transform_to_jde_format(usage_data)
+
+# Dispatch to JDE
+jde_response = post_data_to_jde(jde_payload)
+
+# Store results in S3
+s3_helper.store_jde_dispatch(jde_response, 'jde_dispatches')
+#+END_SRC
+
+** 3. Internal Product Creation
+#+BEGIN_SRC python
+# Create product via internal API
+product_data = {
+    'productName': 'New Ingredient',
+    'description': 'Description',
+    'inventoryUnit': 'KG',
+    'productCategory': 'Ingredient'
+}
+
+response = requests.post(
+    f"{backend_url}/bakeryops/facilities/{facility_id}/products",
+    json=product_data
+)
+#+END_SRC
+
+* S3 Data Lake Structure
+
+#+BEGIN_EXAMPLE
+s3://bakery-operations-data-lake/
+├── jde-ingestion/
+│   ├── to_bakery_ops/
+│   │   └── year=2025/month=08/day=21/
+│   │       └── dispatch_20250821_143022.parquet
+│   ├── from_bakery_ops/  
+│   │   └── year=2025/month=08/day=21/
+│   │       └── dispatch_20250821_143045.parquet
+│   ├── cardex_changes/
+│   │   └── year=2025/month=08/day=21/
+│   │       └── dispatch_20250821_143100.parquet
+│   ├── bakery_ops_products/
+│   │   └── year=2025/month=08/day=21/
+│   │       └── products_20250821_143000.parquet
+│   ├── bakery_ops_movements/
+│   │   └── year=2025/month=08/day=21/
+│   │       └── movements_20250821_143000.parquet
+│   └── schemas/
+│       └── bakery_ops_products/
+│           └── schema_20250821_143000.json
+#+END_EXAMPLE
+
+* UI Components
+
+** Main Components
+
+*** App.js
+- Main application component
+- Handles routing and global state
+- Manages authentication context
+
+*** Component Structure
+#+BEGIN_EXAMPLE
+ui/src/components/
+├── AdvancedPatchForm.js      # Advanced ingredient patching
+├── BackendStatus.js          # Backend health monitoring  
+├── BakeryOpsData.js          # Bakery operations data display
+├── BakeryOpsToJde.js         # Dispatch to JDE interface
+├── BakerySystemData.js       # Legacy system data (deprecated)
+├── BakerySystemToJde.js      # Legacy dispatch interface
+├── BarChart.js               # Data visualization
+├── BatchReview.js            # Batch processing interface
+├── CompareData.js            # Data comparison views
+├── ErrorModal.js             # Error handling modal
+├── JdeItemMasterReview.js    # JDE item master interface
+├── JoinedJDEData.js          # Combined JDE data views
+├── LiveDataComparison.js     # Real-time data comparison
+├── Login.js                  # Authentication component
+├── PivotTable.js             # Data pivot interface
+└── S3DataManager.js          # S3 data lake management
+#+END_EXAMPLE
+
+*** Context Management
+#+BEGIN_EXAMPLE
+ui/src/context/
+└── AuthContext.js            # Authentication state management
+#+END_EXAMPLE
+
+*** Configuration
+#+BEGIN_EXAMPLE  
+ui/src/config/
+└── api.js                    # API endpoint configuration
+#+END_EXAMPLE
+
+** Key Features
+
+*** Authentication
+- JWT token-based authentication
+- Automatic token refresh
+- Protected route handling
+- Login/logout functionality
+
+*** Data Visualization
+- Real-time charts and graphs
+- Interactive data tables
+- Comparison views
+- Export capabilities
+
+*** Batch Processing
+- Batch review interface
+- Bulk operations
+- Progress tracking
+- Error handling
+
+* Schema Management
+
+** Automatic Schema Inference
+#+BEGIN_SRC python
+# Infer schema from data
+schema_def = schema_manager.infer_schema_from_data(sample_data)
+
+# Register new schema version
+version = schema_manager.register_schema('table_name', schema_def)
+
+# Get current schema  
+current = schema_manager.get_current_schema('table_name')
+#+END_SRC
+
+** Schema Evolution
+- Automatic detection of schema changes
+- Version tracking with timestamps
+- DDL generation for new tables
+- Schema compatibility validation
+- Backward compatibility maintenance
+
+** Database Schema Tables
+- ~schema_versions~ - Track schema evolution
+- ~bakery_ops_products~ - Product information
+- ~bakery_ops_movements~ - Inventory movements
+- ~dispatch_logs~ - Operation audit trail
+- ~session_data~ - User session management
+
+* Monitoring & Maintenance
+
+** Health Checks
+- ~GET /health~ - API health status
+- Database connection monitoring
+- S3 connectivity verification
+- JDE system availability
+- Internal service status
+
+** Logging & Audit
+- All data flows logged to S3
+- Database audit trails
+- API access logging
+- Error tracking and alerting
+- Performance metrics collection
+
+** Performance Monitoring
+- Data processing metrics
+- API response times
+- S3 storage utilization
+- Database performance
+- Memory usage tracking
+- Request rate monitoring
+
+** Maintenance Scripts
+#+BEGIN_SRC bash
+# Check system health
+curl http://localhost:8000/health
+
+# View logs
+tail -f /var/log/stical-data-backend.log
+
+# Database maintenance
+psql -d bakery_operations_db -c "VACUUM ANALYZE;"
+
+# Clear old session data
+curl -X DELETE http://localhost:8000/admin/cleanup-sessions
+#+END_SRC
+
+* Troubleshooting
+
+** Common Issues
+
+*** Backend Issues
+
+**** Service Won't Start
+#+BEGIN_SRC bash
+# Check service status
+sudo systemctl status stical-data-backend
+
+# View logs
+journalctl -u stical-data-backend -f
+
+# Check configuration
+cd backend && python -c "from dotenv import load_dotenv; load_dotenv(); import os; print('DB:', os.getenv('PG_DATABASE_URL'))"
+#+END_SRC
+
+**** Database Connection Problems
+#+BEGIN_SRC bash
+# Test database connection
+psql $PG_DATABASE_URL -c "SELECT version();"
+
+# Check database exists
+psql $PG_DATABASE_URL -c "\l"
+
+# Verify schema
+psql $PG_DATABASE_URL -c "\dt"
+#+END_SRC
+
+**** S3 Connection Problems
+#+BEGIN_SRC bash
+# Check AWS credentials
+aws s3 ls s3://your-bucket-name/
+
+# Verify IAM permissions
+aws iam list-attached-role-policies --role-name your-role
+
+# Test S3 connectivity
+curl http://localhost:8000/s3/dispatches
+#+END_SRC
+
+*** Frontend Issues
+
+**** Build Failures
+#+BEGIN_SRC bash
+# Clear npm cache
+npm cache clean --force
+
+# Delete node_modules and reinstall
+rm -rf node_modules package-lock.json
+npm install
+
+# Check for missing dependencies
+npm ls
+#+END_SRC
+
+**** API Connection Issues
+#+BEGIN_SRC bash
+# Test backend connectivity
+curl http://localhost:8000/health
+
+# Check CORS settings
+curl -H "Origin: http://localhost:3000" \
+     -H "Access-Control-Request-Method: GET" \
+     -H "Access-Control-Request-Headers: X-Requested-With" \
+     -X OPTIONS http://localhost:8000/health
+#+END_SRC
+
+*** JDE Integration Problems
+#+BEGIN_SRC bash
+# Check JDE endpoint availability
+curl -u $JDE_PO_USERNAME:$JDE_PO_PASSWORD \
+     $JDE_PO_URL
+
+# Test JDE authentication
+curl -i -u $JDE_PO_USERNAME:$JDE_PO_PASSWORD \
+     $JDE_PO_URL
+
+# Verify JDE data format
+curl http://localhost:8000/data/joined_df3
+#+END_SRC
+
+** Log Files
+- *Backend logs*: ~/var/log/stical-data-backend.log~
+- *Frontend logs*: Browser console and ~/var/log/stical-data-frontend.log~
+- *System logs*: ~journalctl -u stical-data-backend~
+- *Database logs*: PostgreSQL logs (location varies by installation)
+- *S3 operations*: CloudTrail logs for S3 access
+
+** Performance Troubleshooting
+
+*** Slow API Responses
+#+BEGIN_SRC bash
+# Check database query performance
+psql $PG_DATABASE_URL -c "EXPLAIN ANALYZE SELECT * FROM bakery_ops_products LIMIT 10;"
+
+# Monitor active connections
+psql $PG_DATABASE_URL -c "SELECT * FROM pg_stat_activity WHERE state = 'active';"
+
+# Check memory usage
+free -h
+ps aux | grep python
+#+END_SRC
+
+*** High Memory Usage
+#+BEGIN_SRC bash
+# Monitor backend memory
+ps aux | grep uvicorn
+
+# Check database memory
+ps aux | grep postgres
+
+# System memory overview
+htop
+#+END_SRC
+
+* Development
+
+** Running Locally
+
+*** Development Server
+#+BEGIN_SRC bash
+# Backend (with auto-reload)
+cd backend
+uvicorn main:app --reload --host 0.0.0.0 --port 8000
+
+# Frontend (with hot reload)
+cd ui  
+npm start
+#+END_SRC
+
+*** Development with Debug
+#+BEGIN_SRC bash
+# Backend with debug logging
+cd backend
+PYTHONPATH=. python -m uvicorn main:app --reload --log-level debug
+
+# Frontend with verbose output
+cd ui
+npm start --verbose
+#+END_SRC
+
+** Testing
+
+*** Backend Tests
+#+BEGIN_SRC bash
+# Run all tests
+cd backend
+python -m pytest
+
+# Run with coverage
+python -m pytest --cov=.
+
+# Run specific test file
+python -m pytest test_auth.py -v
+
+# Test specific function
+python -m pytest test_jde_structure.py::test_jde_connection -v
+#+END_SRC
+
+*** Frontend Tests
+#+BEGIN_SRC bash
+# Run all tests
+cd ui
+npm test
+
+# Run tests with coverage
+npm test -- --coverage
+
+# Run tests in watch mode
+npm test -- --watch
+
+# Run specific test file
+npm test -- src/components/Login.test.js
+#+END_SRC
+
+*** Integration Tests
+#+BEGIN_SRC bash
+# Test API endpoints
+cd backend
+python test_api_endpoints.py
+
+# Test data flow
+python test_data_flow.py
+
+# Test internal bakery ops
+curl http://localhost:8000/dev/test-internal-bakery-ops
+#+END_SRC
+
+** Development Workflow
+
+*** Adding New Features
+1. Create feature branch from ~main~
+2. Implement backend changes in ~backend/~
+3. Add corresponding frontend components in ~ui/src/~
+4. Update API documentation
+5. Add tests for new functionality
+6. Update schema if needed
+7. Test integration points
+8. Create pull request
+
+*** Code Standards
+- *Backend*: Follow PEP 8 for Python code
+- *Frontend*: Use ESLint and Prettier for JavaScript
+- *Documentation*: Update README.org for major changes
+- *Testing*: Maintain >80% code coverage
+- *Logging*: Add appropriate logging for new features
+
+** Contributing Guidelines
+1. Follow existing code patterns
+2. Add comprehensive logging
+3. Include error handling
+4. Store data flows in S3
+5. Update schema versions as needed
+6. Add tests for new functionality
+7. Document API changes
+8. Update deployment scripts if needed
+
+* Security Considerations
+
+** API Security
+- JWT-based authentication with configurable expiration
+- LDAP integration support for enterprise authentication
+- Role-based access control (RBAC)
+- API rate limiting to prevent abuse
+- Input validation and sanitization
+- CORS configuration for frontend access
+
+** Data Security
+- Encrypted data in transit (HTTPS/TLS)
+- S3 server-side encryption for data at rest
+- Database connection encryption
+- Secure credential management using environment variables
+- No sensitive data in logs
+- Password hashing for local authentication
+
+** Network Security
+- Internal API endpoints isolated from external access
+- Database connections through encrypted channels
+- VPC configuration for AWS resources
+- Firewall rules for production deployment
+- Regular security updates
+
+** Compliance
+- Audit trail in S3 with immutable logs
+- Data retention policies implementation
+- Schema version tracking for data governance
+- Access logging for compliance reporting
+- GDPR compliance considerations (if applicable)
+
+* Deployment Strategies
+
+** Development Deployment
+- Local development with hot reload
+- SQLite database for quick setup
+- Mock S3 service for testing
+- Sample data generation
+
+** Staging Deployment  
+- Production-like environment
+- Full PostgreSQL database
+- Real S3 integration
+- Load testing capabilities
+
+** Production Deployment
+- High availability setup
+- Database clustering
+- Load balancing
+- Monitoring and alerting
+- Backup and recovery procedures
+
+** Scaling Considerations
+- Horizontal scaling with multiple backend instances
+- Database read replicas
+- S3 for distributed storage
+- CDN for frontend assets
+- Microservices architecture for large deployments
+
+* Support & Maintenance
+
+** Documentation
+- *API Documentation*: Available at ~/docs~ endpoint
+- *Schema Documentation*: Auto-generated from database
+- *Architecture Diagrams*: In ~/docs~ folder
+- *Deployment Guides*: In ~/deploy~ directory
+
+** Monitoring Tools
+- Health check endpoints
+- Metrics collection
+- Log aggregation
+- Performance monitoring
+- Alerting system
+
+** Backup & Recovery
+- Database backups (automated)
+- S3 data lake redundancy
+- Configuration backups
+- Disaster recovery procedures
+
+** Contact Information
+- *System Administrator*: [Insert contact details]
+- *Development Team*: [Insert contact details]  
+- *Business Users*: [Insert contact details]
+- *Emergency Contact*: [Insert 24/7 support details]
+
+* Version History
+- *v2.0.0*: Internal Bakery Operations system with S3 data lake
+- *v1.x.x*: Original external Bakery-System integration (deprecated)
+
+* License
+[Insert license information]
+
+* Appendix
+
+** Useful Commands Reference
+#+BEGIN_SRC bash
+# System Status
+sudo systemctl status stical-data-backend stical-data-frontend
+
+# View Logs  
+journalctl -u stical-data-backend -f
+tail -f /var/log/stical-data-backend.log
+
+# Database Operations
+psql $PG_DATABASE_URL -c "\dt"  # List tables
+psql $PG_DATABASE_URL -c "SELECT * FROM schema_versions ORDER BY created_at DESC LIMIT 5;"
+
+# S3 Operations
+aws s3 ls s3://bakery-operations-data-lake/jde-ingestion/ --recursive
+
+# API Testing
+curl -X POST http://localhost:8000/dev/initialize-sample-data
+curl http://localhost:8000/health
+curl http://localhost:8000/bakeryops/facilities/default_facility/products
+#+END_SRC
+
+** Environment Variables Reference
+#+BEGIN_SRC bash
+# Complete .env template
+PG_DATABASE_URL=postgresql://username:password@localhost:5432/bakery_operations_db
+DB_NAME=bakery_operations_db
+BACKEND_BASE_URL=http://localhost:8000
+FACILITY_ID=default_facility
+JDE_BUSINESS_UNIT=1110
+JDE_PO_URL=https://your-jde-server/jderest/v3/orchestrator/JDE_PO_SUMMARY
+JDE_PO_USERNAME=your_username
+JDE_PO_PASSWORD=your_password
+AWS_ACCESS_KEY_ID=your_access_key
+AWS_SECRET_ACCESS_KEY=your_secret_key
+S3_BUCKET_NAME=bakery-operations-data-lake
+SECRET_KEY=your-secret-key-change-this-in-production
+ALGORITHM=HS256
+#+END_SRC
