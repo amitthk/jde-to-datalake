@@ -1,4 +1,4 @@
-#+TITLE: JD Edwards (JDE) to Bakery Operations Data Ingestion System
+#+TITLE: Using Apache Airflow to integrate JD Edwards ERP to Enterprise Data Lake and External System
 #+AUTHOR: amitthk
 #+DATE: 2025-08-21
 #+OPTIONS: toc:2 num:t
