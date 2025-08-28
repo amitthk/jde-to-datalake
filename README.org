@@ -5,24 +5,195 @@
 
 * Overview
 
-This system provides a sample data ingestion pipeline between JD Edwards (JDE) and a sample Bakery Operations system, with integrated S3 data lake functionality for audit trails and analytics.
+How do we extract critical business insights from ERP systems without compromising their performance or integrity? This repository demonstrates a complete data pipeline solution that safely extracts data from JD Edwards ERP into an S3 data lake using Apache Airflow for reliable orchestration. The system implements comprehensive data validation and compliance checks to ensure data integrity while maintaining zero impact on ERP performance through non-intrusive extraction methods. The extracted data feeds an Operations Management system for a bakery, enabling real-time time series analytics and business insights while preserving full audit trails for compliance and historical analyses.
 
-** Architecture Diagram
+Systems like JD Edwards are the backbone of business operations, storing the most accurate financial and operational data at any given moment. However, when you need to unlock deeper insights through time series analysis, diagnostics, and predictive analytics, directly querying the ERP can slow down critical business processes. The smart approach is to create a seamless data pipeline that feeds this valuable information into a data lake, where you can perform complex analytics and support additional business applications without ever touching your production ERP system's performance.
 
-#+BEGIN_EXAMPLE
-┌─────────────┐    ┌─────────────────┐    ┌──────────────────┐    ┌─────────────┐
-│     JDE     │◄──►│  Data Pipeline  │◄──►│ Bakery Operations│◄──►│  S3 Data    │
-│   System    │    │   (FastAPI +    │    │     System       │    │   Lake      │
-│             │    │    Airflow)     │    │   (Internal)     │    │             │
-└─────────────┘    └─────────────────┘    └──────────────────┘    └─────────────┘
-                            │
-                    ┌─────────────────┐
-                    │   PostgreSQL    │
-                    │   Database      │
-                    │  (Metadata &    │
-                    │   Tracking)     │
-                    └─────────────────┘
-#+END_EXAMPLE
+This repository presents a *demonstration system* - a simplified version of a production-grade enterprise data integration platform. All organization-specific information, proprietary business logic, and sensitive configurations have been removed or anonymized. This example system cannot be deployed as-is in a production environment; a real-world implementation would require comprehensive security frameworks, compliance controls, audit mechanisms, performance optimization, and integration with existing enterprise infrastructure.
+
+The system showcases an advanced data pipeline architecture that bridges the gap between JD Edwards ERP and operational management systems, specifically demonstrated through a bakery operations use case. This implementation leverages Apache Airflow as the orchestration engine to create resilient, monitored data pipelines that ensure data integrity while providing real-time visibility into inventory movements and operational metrics.
+
+** Architecture Overview
+
+The architecture (shown in ~images/jde_to_datalake.svg~) demonstrates a sophisticated multi-tier system designed for enterprise-scale data integration:
+
+[[file:images/jde_to_datalake.svg]]
+
+*** Core Components Explanation
+
+**** JD Edwards ERP Integration Layer
+The system interfaces with JD Edwards through secure API endpoints to extract inventory data from the Cardex system. This integration handles the complex task of retrieving inventory movements, stock levels, and product master data while maintaining the integrity of the source ERP system. The JDE helper module (~backend/jde_helper.py~) manages authentication, data extraction, and ensures proper error handling for enterprise-grade reliability.
+
+**** Apache Airflow Orchestration Engine
+Apache Airflow serves as the central nervous system for data pipeline orchestration, providing:
+- *Scheduled Data Synchronization*: Automated workflows that run at predetermined intervals to ensure data freshness
+- *Error Handling & Retry Logic*: Sophisticated retry mechanisms with exponential backoff for handling transient failures
+- *Data Lineage Tracking*: Complete audit trail of data transformations and movements
+- *Monitoring & Alerting*: Real-time visibility into pipeline health and performance metrics
+
+**** AWS S3 Data Lake Infrastructure
+The S3 data lake serves as the central repository for all data assets, organized in a medallion architecture pattern:
+- *Bronze Layer*: Raw data ingestion with schema-on-read capabilities
+- *Silver Layer*: Cleansed and standardized data with enforced data quality rules
+- *Gold Layer*: Business-ready datasets optimized for analytics and reporting
+- *Audit Trail Storage*: Complete historical record of all data operations and transformations
+
+**** PostgreSQL Metadata & Control Database
+PostgreSQL manages the operational metadata including:
+- Schema evolution tracking with automatic DDL generation
+- Data pipeline execution logs and performance metrics
+- User session management and authentication tokens
+- Configuration management for dynamic pipeline behavior
+
+**** React.js Compliance Dashboard
+The frontend application provides comprehensive operational oversight:
+- Real-time monitoring of data pipeline execution status
+- Interactive data validation interfaces for outlier detection and correction
+- Compliance reporting with drill-down capabilities into data lineage
+- Manual override capabilities for exception handling
+
+** Airflow Data Pipeline Implementation
+
+The system implements two primary data flow patterns through sophisticated Airflow DAGs:
+
+*** JDE Cardex to External System Pipeline (~dag_cardex_changes_to_bakery_system.py~)
+
+This pipeline orchestrates the extraction of inventory data from JDE Cardex and intelligently transforms it for consumption by external operational systems:
+
+#+BEGIN_SRC python
+def get_jde_cardex_with_comparison(bu: str, days_back: int = 5) -> dict:
+    """
+    Orchestrates the extraction and comparison of JDE cardex data
+    with external system inventory records.
+    """
+    load_dotenv()
+    
+    # Calculate extraction window
+    today = datetime.now()
+    start_date = today - timedelta(days=days_back)
+    date_str = start_date.strftime('%d/%m/%Y')
+    
+    print(f"Fetching JDE cardex data for BU {bu} since {date_str}")
+    
+    # Extract from JDE with error handling
+    from jde_helper import get_latest_jde_cardex
+    jde_data = get_latest_jde_cardex(bu, date_str)
+    
+    if not jde_data or 'ServiceRequest1' not in jde_data:
+        print(f"No JDE data found for BU {bu}")
+        return None
+    
+    # Transform JDE data structure for downstream processing
+    jde_transactions = jde_data['ServiceRequest1']['fs_DATABROWSE_V4111A']['data']['gridData']['rowset']
+    df_jde = pd.DataFrame(jde_transactions)
+    
+    # Parallel extraction from external system
+    from bakery_helper import get_data_from_bakery_system
+    bakery_system_data = get_data_from_bakery_system()
+    
+    # Execute data quality validation and unit conversions
+    return perform_intelligent_data_reconciliation(df_jde, bakery_system_data)
+#+END_SRC
+
+The pipeline includes sophisticated unit conversion logic that handles the complex mapping between JDE's unit of measure system and operational requirements:
+
+#+BEGIN_SRC python
+def convert_unit_quantity(quantity: float, from_unit: str, to_unit: str) -> float:
+    """
+    Performs intelligent unit conversion with validation and error handling.
+    Supports complex conversions like weight-to-volume for different ingredients.
+    """
+    try:
+        # Apply conversion factors based on ingredient properties
+        conversion_result = perform_conversion_with_validation(quantity, from_unit, to_unit)
+        
+        # Log conversion for audit trail
+        log_conversion_event(quantity, from_unit, to_unit, conversion_result)
+        
+        return conversion_result
+    except ConversionError as e:
+        # Route to manual validation queue
+        queue_for_manual_review(quantity, from_unit, to_unit, str(e))
+        raise
+#+END_SRC
+
+*** External System to JDE Synchronization Pipeline (~dag_bakery_system_to_jde.py~)
+
+This reverse pipeline handles the critical task of synchronizing consumption data back to JDE for accurate inventory management:
+
+#+BEGIN_SRC python
+def process_inventory_consumption_batch():
+    """
+    Orchestrates the processing of inventory consumption data
+    from operational systems back to JDE for accurate inventory tracking.
+    """
+    # Extract consumption data with data quality validation
+    consumption_data = extract_validated_consumption_data()
+    
+    # Apply business rules and unit conversions
+    processed_data = apply_jde_transformation_rules(consumption_data)
+    
+    # Execute batch processing with error handling
+    for batch in chunk_data_for_processing(processed_data):
+        try:
+            result = submit_ii_transaction_to_jde(batch)
+            log_transaction_result(batch, result)
+        except JDETransactionError as e:
+            handle_transaction_failure(batch, e)
+#+END_SRC
+
+** Data Validation & Compliance Framework
+
+The system incorporates comprehensive data validation mechanisms that ensure data integrity throughout the pipeline:
+
+*** Validation Dashboard - JDE Cardex to External System
+
+[[file:images/jde_cardex_to_external_system_validation.png]]
+
+This dashboard (~jde_cardex_to_external_system.png~) provides a critical checkpoint where data analysts can:
+- Review inventory movements extracted from JDE Cardex before synchronization
+- Identify and investigate outliers or anomalous data patterns
+- Validate unit conversions and quantity calculations
+- Approve or reject data batches for downstream processing
+- Manually correct data discrepancies with full audit trail
+
+*** Validation Dashboard - External System to JDE
+
+[[file:images/external_system_to_jde_validation.png]]
+
+The reverse validation interface (~external_system_to_jde_validation.png~) enables operators to:
+- Map consumption data from operational systems to JDE-compatible formats
+- Validate ingredient mappings and unit conversions (e.g., sugar consumption in kg to JDE inventory units)
+- Review calculated inventory adjustments before committing to JDE
+- Dispatch II (Inventory Issues) transactions to JDE with confidence
+- Monitor transaction status and handle exceptions
+
+** Production Considerations & Security Framework
+
+*Important Notice*: This demonstration system has been significantly simplified for educational purposes. A production-ready implementation would require:
+
+*** Security & Compliance
+- End-to-end encryption for data in transit and at rest
+- Role-based access control (RBAC) with multi-factor authentication
+- SOX compliance controls for financial data handling
+- GDPR/data privacy compliance for customer data
+- Comprehensive audit logging with tamper-evident storage
+
+*** Performance & Scalability
+- Horizontal scaling capabilities for high-volume data processing
+- Caching strategies for frequently accessed data
+- Database partitioning and indexing optimization
+- Load balancing and failover mechanisms
+- Performance monitoring and alerting
+
+*** Integration & Operations
+- Enterprise service bus integration for system-to-system communication
+- Comprehensive monitoring with tools like Prometheus and Grafana
+- Automated deployment pipelines with CI/CD integration
+- Disaster recovery and business continuity planning
+- Change management and version control for pipeline configurations
+
+The system demonstrates the power of modern data engineering practices applied to enterprise ERP integration challenges, showcasing how Apache Airflow can serve as a robust orchestration platform for complex data pipelines while maintaining the operational visibility and control required for mission-critical business processes.
 
 * Key Features
 
@@ -32,7 +203,7 @@ The system enables seamless data exchange between JDE and Bakery Operations:
 - *Bakery Operations to JDE*: Sends usage and consumption data along with inventory adjustments
 
 ** S3 Data Lake Integration
-All data operations are captured and stored in a comprehensive data lake:
+All data operations are captured and stored in a  data lake:
 - Data flows are stored as Parquet files in S3 for efficient querying
 - Files are organized by date and operation type for easy navigation
 - Schema versions are tracked automatically as data structures evolve
@@ -59,6 +230,39 @@ The system includes self-contained API endpoints that eliminate external depende
 - Data is stored in memory with automatic S3 backup for audit purposes
 - Mock data generation tools are included for testing and development
 
+** Intelligent Data Pipeline Orchestration
+
+The heart of this system lies in its sophisticated use of Apache Airflow to manage complex data integration workflows. Unlike simple ETL tools, this implementation leverages Airflow's advanced capabilities to create self-healing, monitored data pipelines that handle the intricacies of enterprise ERP integration.
+
+*** Advanced Airflow Features Implementation
+- *Dynamic DAG Generation*: Pipelines automatically adapt to changing data schemas and business requirements
+- *Smart Retry Logic*: Exponential backoff with jittering for handling transient ERP system availability issues
+- *Data Quality Validation*: Built-in data profiling and anomaly detection before data commits
+- *Parallel Processing*: Intelligent task parallelization for optimal resource utilization
+- *Cross-System Transaction Management*: Ensures ACID properties across distributed systems
+
+*** Real-Time Monitoring & Alerting
+The system provides comprehensive operational visibility through:
+- Pipeline execution dashboards with drill-down capabilities
+- Automated alerting for data quality violations and system failures
+- Performance metrics tracking with historical trend analysis
+- Custom business rule validation with configurable thresholds
+
+** Enterprise-Grade Data Lake Architecture
+
+The S3-based data lake implements industry best practices for large-scale data management:
+
+*** Medallion Architecture Pattern
+- *Bronze Layer*: Raw data ingestion with schema-on-read flexibility
+- *Silver Layer*: Cleansed, validated data with enforced quality rules
+- *Gold Layer*: Business-ready datasets optimized for analytics consumption
+
+*** Advanced Data Governance
+- Automated data cataloging with schema evolution tracking
+- Data lineage visualization from source systems to final consumption
+- Time-travel capabilities for historical data analysis
+- Compliance reporting for regulatory requirements
+
 * System Components
 
 ** Backend Services
@@ -67,7 +271,7 @@ The system includes self-contained API endpoints that eliminate external depende
 The backend infrastructure is built around several integrated services. The FastAPI application serves as the main API server (~backend/main.py~) with built-in internal bakery operations endpoints available at ~/bakeryops/*~. Data lake operations are managed through the S3 helper module (~backend/s3_helper.py~), while schema tracking and versioning is handled by the schema manager (~backend/schema_manager.py~). Integration with JDE systems is provided through the dedicated JDE helper (~backend/jde_helper.py~).
 
 *** Helper Modules
-Supporting functionality includes the bakery operations helper for API integration (~backend/bakery_ops_helper.py~), JWT-based authentication system (~backend/auth.py~), comprehensive user session management (~backend/session_helper.py~), and shared utility functions (~backend/utility.py~).
+Supporting functionality includes the bakery operations helper for API integration (~backend/bakery_ops_helper.py~), JWT-based authentication system (~backend/auth.py~),  user session management (~backend/session_helper.py~), and shared utility functions (~backend/utility.py~).
 
 ** Data Pipeline (Airflow DAGs)
 The system includes automated data pipeline workflows for seamless data synchronization. The JDE Cardex to Bakery Operations pipeline (~backend/dags/dag_cardex_changes_to_bakery_ops.py~) handles inventory transfers, while the Bakery Operations to JDE synchronization (~backend/dags/dag_bakery_ops_to_jde.py~) manages usage and consumption data flow back to the JDE system.
@@ -76,7 +280,7 @@ The system includes automated data pipeline workflows for seamless data synchron
 The user interface is built as a React-based dashboard (~ui/src/~) with a well-organized component structure. The main application component (~App.js~) orchestrates the overall user experience, while the ~components/~ directory contains reusable UI elements for data visualization and user interaction. State management is handled through React context (~context/~), and API configuration is centralized in the ~config/~ directory.
 
 ** Database Schema
-PostgreSQL serves as the central database for metadata tracking and comprehensive audit trails. The complete database schema is defined in ~backend/create_bakery_ops_tables.sql~ and includes all necessary tables for tracking system operations, data transformations, and user activities.
+PostgreSQL serves as the central database for metadata tracking and  audit trails. The complete database schema is defined in ~backend/create_bakery_ops_tables.sql~ and includes all necessary tables for tracking system operations, data transformations, and user activities.
 
 * Installation & Setup
 
